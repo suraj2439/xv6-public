@@ -43,6 +43,9 @@ kinit2(void *vstart, void *vend)
   kmem.use_lock = 1;
 }
 
+/*
+Our : Building a linked list of free pages (free pages added to linked list by kfree)
+*/
 void
 freerange(void *vstart, void *vend)
 {

@@ -13,7 +13,10 @@ pde_t *kpgdir;  // for use in scheduler()
 // Set up CPU's kernel segment descriptors.
 // Run once on entry on each CPU.
 void
-seginit(void)
+seginit(void)		/*Our: previously setup in bootasm.S, makes gdt entries
+			  logical addr = linear addr(may bcoz base is 0 in segmentation i.e. segmentaion is practically off)
+			 but linear addr != phy addr due to paging
+			 xv6 doesnt change segmentation ever again*/	
 {
   struct cpu *c;
 
@@ -38,20 +41,22 @@ walkpgdir(pde_t *pgdir, const void *va, int alloc)
   pde_t *pde;
   pte_t *pgtab;
 
-  pde = &pgdir[PDX(va)];
+  pde = &pgdir[PDX(va)];				/*Our:get pointer to pde by removing pte and offset bits */
   if(*pde & PTE_P){
-    pgtab = (pte_t*)P2V(PTE_ADDR(*pde));
+    pgtab = (pte_t*)P2V(PTE_ADDR(*pde));		/*Our: if pte is present return existing pte entry, else allocate new									page for page table and then return pte that corresponds to va */
   } else {
-    if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)
+    if(!alloc || (pgtab = (pte_t*)kalloc()) == 0)	/*Our:f alloc is 1, allocate a page for page table
+								 which will contain that va */
       return 0;
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
     // be further restricted by the permissions in the page table
     // entries, if necessary.
-    *pde = V2P(pgtab) | PTE_P | PTE_W | PTE_U;
+    *pde = V2P(pgtab) | PTE_P | PTE_W | PTE_U;		/*Our: Create pde entry of newly allocated page table */
   }
-  return &pgtab[PTX(va)];
+  return &pgtab[PTX(va)];				/*Our:get pointer to pte by removing offset bits */
+
 }
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -70,7 +75,7 @@ mappages(pde_t *pgdir, void *va, uint size, uint pa, int perm)
       return -1;
     if(*pte & PTE_P)
       panic("remap");
-    *pte = pa | perm | PTE_P;
+    *pte = pa | perm | PTE_P;			/*Our : Creates or modifies page table entries for the given address range*/
     if(a == last)
       break;
     a += PGSIZE;
@@ -121,13 +126,13 @@ setupkvm(void)
   pde_t *pgdir;
   struct kmap *k;
 
-  if((pgdir = (pde_t*)kalloc()) == 0)
+  if((pgdir = (pde_t*)kalloc()) == 0)   /* Our: allocate a free page for pgdir, if it fails setupkvm fails   */
     return 0;
-  memset(pgdir, 0, PGSIZE);
+  memset(pgdir, 0, PGSIZE);             /*Our: fill this page with 0 */
   if (P2V(PHYSTOP) > (void*)DEVSPACE)
     panic("PHYSTOP too high");
-  for(k = kmap; k < &kmap[NELEM(kmap)]; k++)
-    if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,
+  for(k = kmap; k < &kmap[NELEM(kmap)]; k++)      /*Our: iterate over kvm(has 4 entries) */
+    if(mappages(pgdir, k->virt, k->phys_end - k->phys_start,		/*Our: make page table entries i.e. map pa to va */
                 (uint)k->phys_start, k->perm) < 0) {
       freevm(pgdir);
       return 0;
@@ -140,8 +145,9 @@ setupkvm(void)
 void
 kvmalloc(void)
 {
-  kpgdir = setupkvm();
-  switchkvm();
+  kpgdir = setupkvm();			/*Our:create page table mapping for kernel and returns base of pgdir*/
+
+  switchkvm();				/*Our: set cr3 = kpgdir*/
 }
 
 // Switch h/w page table register to the kernel-only page table,
@@ -150,6 +156,8 @@ void
 switchkvm(void)
 {
   lcr3(V2P(kpgdir));   // switch to the kernel page table
+			/*Our: previously cr3 was pointing to entrypgdir setup in entry.S for 1 level paging*/	
+			/*Our: now cr3 is setup for 2 level paging*/	
 }
 
 // Switch TSS and h/w page table to correspond to process p.

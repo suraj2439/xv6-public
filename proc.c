@@ -104,7 +104,7 @@ found:
 
   // Set up new context to start executing at forkret,
   // which returns to trapret.
-  sp -= 4;
+  sp -= 4;				/*Our: return address = trapret*/
   *(uint*)sp = (uint)trapret;
 
   sp -= sizeof *p->context;
@@ -121,7 +121,7 @@ void
 userinit(void)
 {
   struct proc *p;
-  extern char _binary_initcode_start[], _binary_initcode_size[];
+  extern char _binary_initcode_start[], _binary_initcode_size[];	/*Our: given by linker*/
 
   p = allocproc();
   
